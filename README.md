@@ -2,9 +2,9 @@
 
 ![ArmLenQuant Banner](https://via.placeholder.com/800x200/1a1a1a/ffffff?text=ARMLENQUANT+-+AUTONOMOUS+AGENT+ORCHESTRATION+SYSTEM)
 
-[![Version](https://img.shields.io/badge/version-4.3-blue.svg)](https://github.com/armlenquant-cloud/armlenquant)
-[![Status](https://img.shields.io/badge/status-phases_1--10_complete-green.svg)](https://github.com/armlenquant-cloud/armlenquant)
-[![Architecture](https://img.shields.io/badge/architecture-split--brain-orange.svg)](https://github.com/armlenquant-cloud/armlenquant)
+[![Version](https://img.shields.io/badge/version-4.3-blue.svg)](https://github.com/guerra2fernando/army)
+[![Status](https://img.shields.io/badge/status-phases_1--10_complete-green.svg)](https://github.com/guerra2fernando/army)
+[![Architecture](https://img.shields.io/badge/architecture-split--brain-orange.svg)](https://github.com/guerra2fernando/army)
 
 > **A self-evolving autonomous agent system that unifies all digital operations across business, development, research, and personal life into one intelligent orchestration layer.**
 
@@ -137,8 +137,8 @@ All local development is finished with **475 passing tests** across all componen
 ### 1. Clone & Setup
 
 ```bash
-git clone https://github.com/armlenquant-cloud/armlenquant.git
-cd armlenquant
+git clone https://github.com/guerra2fernando/army.git
+cd army
 ```
 
 ### 2. Configure Environment
@@ -262,7 +262,7 @@ This is a solo project currently in active development. Future contributions wel
 
 ## 📞 Support
 
-- **Issues**: [GitHub Issues](https://github.com/armlenquant-cloud/armlenquant/issues)
+- **Issues**: [GitHub Issues](https://github.com/guerra2fernando/army/issues)
 - **Documentation**: See `DOCUMENTATION_GAPS.md` for known gaps
 - **Status**: All phases 1-10 complete, Phase 11 (cloud deployment) in progress
 

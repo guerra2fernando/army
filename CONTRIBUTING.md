@@ -14,7 +14,7 @@ ArmLenQuant is currently in **active development** by a solo developer. The proj
 ## 📋 Contribution Guidelines
 
 ### Before You Start
-1. Check the [Issues](https://github.com/armlenquant-cloud/armlenquant/issues) to see if your idea is already being worked on
+1. Check the [Issues](https://github.com/guerra2fernando/army/issues) to see if your idea is already being worked on
 2. For major changes, please open an issue first to discuss what you would like to change
 3. Ensure your changes align with the project's architecture and philosophy
 
@@ -198,7 +198,7 @@ For feature requests, describe:
 
 ## 📞 Getting Help
 
-- **Issues**: [GitHub Issues](https://github.com/armlenquant-cloud/armlenquant/issues)
+- **Issues**: [GitHub Issues](https://github.com/guerra2fernando/army/issues)
 - **Documentation**: Check the README.md and GETTING_STARTED.md first
 - **Community**: Join the discussion in issues
 
