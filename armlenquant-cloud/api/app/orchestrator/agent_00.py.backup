@@ -1,0 +1,433 @@
+"""
+Agent 00: The Orchestrator
+Central intelligence for the ArmLenQuant system.
+"""
+import json
+from datetime import datetime
+from typing import Optional, Dict, Any
+from uuid import uuid4
+
+from loguru import logger
+
+from app.config import get_settings
+from app.db import Database
+from app.orchestrator.prompts import ORCHESTRATOR_SYSTEM_PROMPT, TASK_GENERATION_PROMPT
+from app.orchestrator.intent_parser import IntentParser, EntityExtractor
+from app.orchestrator.task_router import TaskRouter
+
+settings = get_settings()
+
+
+class OrchestratorResponse:
+    """Structured response from the Orchestrator."""
+    
+    def __init__(
+        self,
+        success: bool,
+        message: str,
+        task_created: bool = False,
+        task_id: Optional[str] = None,
+        agent_target: Optional[str] = None,
+        requires_clarification: bool = False,
+        clarification_question: Optional[str] = None,
+        data: Optional[dict] = None
+    ):
+        self.success = success
+        self.message = message
+        self.task_created = task_created
+        self.task_id = task_id
+        self.agent_target = agent_target
+        self.requires_clarification = requires_clarification
+        self.clarification_question = clarification_question
+        self.data = data or {}
+    
+    def to_dict(self) -> dict:
+        return {
+            "success": self.success,
+            "message": self.message,
+            "task_created": self.task_created,
+            "task_id": self.task_id,
+            "agent_target": self.agent_target,
+            "requires_clarification": self.requires_clarification,
+            "clarification_question": self.clarification_question,
+            "data": self.data
+        }
+
+
+class Orchestrator:
+    """
+    Agent 00: The central orchestration intelligence.
+    
+    Responsibilities:
+    - Parse user commands
+    - Route to appropriate agents
+    - Create and manage tasks
+    - Provide system status
+    - Coordinate multi-agent workflows
+    """
+    
+    def __init__(
+        self,
+        client: Optional[AsyncOpenAI] = None,
+        intent_parser: Optional[IntentParser] = None,
+        task_router: Optional[TaskRouter] = None
+    ):
+        self.client = client or AsyncOpenAI(api_key=settings.openai_api_key)
+        self.model = settings.openai_model
+        self.intent_parser = intent_parser or IntentParser(client=self.client)
+        self.task_router = task_router or TaskRouter()
+        self.entity_extractor = EntityExtractor()
+        self.logger = logger.bind(agent="ORCHESTRATOR")
+    
+    async def process_command(
+        self,
+        command: str,
+        user_id: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> OrchestratorResponse:
+        """
+        Process a user command and route appropriately.
+        
+        Args:
+            command: User's natural language command
+            user_id: ID of the requesting user
+            context: Optional additional context
+            
+        Returns:
+            OrchestratorResponse with result
+        """
+        self.logger.info(f"Processing command: {command[:100]}...")
+        
+        try:
+            # Step 1: Get relevant context from RAG
+            rag_context = await self._get_rag_context(command)
+            
+            # Step 2: Parse intent
+            intent = await self.intent_parser.parse(command, rag_context)
+            
+            # Step 3: Extract additional entities
+            extracted_entities = self.entity_extractor.extract_all(command)
+            intent["entities"] = {
+                **intent.get("entities", {}),
+                **extracted_entities
+            }
+            
+            # Step 4: Check if clarification needed
+            if intent.get("requires_clarification"):
+                return OrchestratorResponse(
+                    success=True,
+                    message="I need more information.",
+                    requires_clarification=True,
+                    clarification_question=intent.get("clarification_question")
+                )
+            
+            # Step 5: Route to agent
+            routing = self.task_router.route(intent)
+            
+            # Step 6: Handle internal queries or create task
+            if routing.get("internal"):
+                return await self._handle_internal_action(routing, user_id)
+            
+            if not routing.get("target_agent"):
+                return OrchestratorResponse(
+                    success=False,
+                    message="I couldn't determine how to handle that request.",
+                    requires_clarification=True,
+                    clarification_question="Could you be more specific about what you'd like me to do?"
+                )
+            
+            # Step 7: Create task
+            task_id = await self._create_task(
+                agent_target=routing["target_agent"],
+                parameters=routing["parameters"],
+                user_id=user_id,
+                original_command=command
+            )
+            
+            # Step 8: Log event
+            await self._log_event(
+                event_type="COMMAND_PROCESSED",
+                payload={
+                    "command": command,
+                    "user_id": user_id,
+                    "task_id": task_id,
+                    "agent_target": routing["target_agent"],
+                    "confidence": routing.get("confidence", 0)
+                }
+            )
+            
+            # Step 9: Generate user response
+            response_message = self._generate_response_message(
+                routing["target_agent"],
+                routing["action"],
+                routing["parameters"]
+            )
+            
+            return OrchestratorResponse(
+                success=True,
+                message=response_message,
+                task_created=True,
+                task_id=task_id,
+                agent_target=routing["target_agent"],
+                data={
+                    "action": routing.get("action"),
+                    "parameters": routing.get("parameters"),
+                    "confidence": routing.get("confidence")
+                }
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error processing command: {e}")
+            await self._log_event(
+                event_type="COMMAND_ERROR",
+                payload={
+                    "command": command,
+                    "user_id": user_id,
+                    "error": str(e)
+                }
+            )
+            return OrchestratorResponse(
+                success=False,
+                message=f"An error occurred: {str(e)}"
+            )
+    
+    async def _get_rag_context(self, query: str) -> str:
+        """Retrieve relevant context from knowledge base."""
+        # This will be fully implemented in Phase 5
+        # For now, return empty context
+        try:
+            kb = Database.get_collection("knowledge_base")
+            if kb is None:
+                return ""
+            
+            # Simple text search for now
+            # Check if text index exists before querying
+            cursor = kb.find(
+                {"$text": {"$search": query}},
+                {"score": {"$meta": "textScore"}}
+            ).sort([("score", {"$meta": "textScore"})]).limit(3)
+            
+            results = await cursor.to_list(length=3)
+            if results:
+                return "\n".join([r.get("content", "") for r in results])
+            return ""
+        except Exception as e:
+            self.logger.warning(f"RAG retrieval failed: {e}")
+            return ""
+    
+    async def _create_task(
+        self,
+        agent_target: str,
+        parameters: dict,
+        user_id: str,
+        original_command: str
+    ) -> str:
+        """Create a task in the queue."""
+        tasks = Database.get_collection("task_queue")
+        
+        task_id = str(uuid4())
+        task_doc = {
+            "_id": task_id,
+            "task_id": task_id,
+            "agent_target": agent_target,
+            "payload": {
+                **parameters,
+                "original_command": original_command
+            },
+            "status": "PENDING",
+            "priority": 5,
+            "worker_id": None,
+            "retry_count": 0,
+            "max_retries": 3,
+            "error_log": [],
+            "result": None,
+            "created_by": user_id,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
+        }
+        
+        await tasks.insert_one(task_doc)
+        self.logger.info(f"Created task {task_id} for {agent_target}")
+        
+        return task_id
+    
+    async def _handle_internal_action(
+        self,
+        routing: dict,
+        user_id: str
+    ) -> OrchestratorResponse:
+        """Handle system-level queries internally."""
+        action = routing.get("action")
+        
+        if action == "system_status":
+            status = await self._get_system_status()
+            return OrchestratorResponse(
+                success=True,
+                message="Here's the current system status.",
+                data=status
+            )
+        
+        if action == "show_capabilities":
+            return OrchestratorResponse(
+                success=True,
+                message=self._get_capabilities_message(),
+                data={"capabilities": self.task_router.AGENT_ACTIONS}
+            )
+        
+        if action == "list_agents":
+            agents = await self._get_agents_list()
+            return OrchestratorResponse(
+                success=True,
+                message="Here are the registered agents.",
+                data={"agents": agents}
+            )
+        
+        return OrchestratorResponse(
+            success=False,
+            message="I'm not sure how to handle that system request."
+        )
+    
+    async def _get_system_status(self) -> dict:
+        """Get current system status."""
+        try:
+            agents = Database.get_collection("agent_registry")
+            tasks = Database.get_collection("task_queue")
+            
+            agent_count = await agents.count_documents({})
+            active_agents = await agents.count_documents({"status": "ACTIVE"})
+            pending_tasks = await tasks.count_documents({"status": "PENDING"})
+            in_progress = await tasks.count_documents({"status": "IN_PROGRESS"})
+            
+            return {
+                "status": "HEALTHY",
+                "agents": {
+                    "total": agent_count,
+                    "active": active_agents
+                },
+                "tasks": {
+                    "pending": pending_tasks,
+                    "in_progress": in_progress
+                },
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        except Exception as e:
+            return {"status": "ERROR", "error": str(e)}
+    
+    async def _get_agents_list(self) -> list:
+        """Get list of registered agents."""
+        try:
+            agents = Database.get_collection("agent_registry")
+            cursor = agents.find({})
+            results = await cursor.to_list(length=100)
+            return [
+                {
+                    "name": a.get("agent_name"),
+                    "status": a.get("status"),
+                    "location": a.get("location"),
+                    "version": a.get("version")
+                }
+                for a in results
+            ]
+        except Exception as e:
+            self.logger.error(f"Failed to get agents list: {e}")
+            return []
+    
+    def _get_capabilities_message(self) -> str:
+        """Generate capabilities description."""
+        return """Here's what I can help you with:
+
+**📈 Crypto Intelligence** (via Crypto Sentinel)
+- Get market overview and trading signals
+- Analyze specific cryptocurrencies
+- Generate morning briefs
+
+**💼 Job Hunting** (via Job Hunter)
+- Search for job opportunities
+- Generate tailored resumes
+- Create cover letters
+- Research companies
+
+**🛠️ Project Development** (via Ideas Machine)
+- Analyze project ideas
+- Scaffold new projects
+- Recommend tech stacks
+- Generate documentation
+
+**🔧 System Operations**
+- Check system status
+- View agent health
+- Manage tasks
+
+Just tell me what you'd like to do!"""
+    
+    def _generate_response_message(
+        self,
+        agent: str,
+        action: str,
+        parameters: dict
+    ) -> str:
+        """Generate a user-friendly response message."""
+        
+        messages = {
+            "JOB_HUNTER": {
+                "search_jobs": "🔍 Starting job search. I'll look for opportunities matching your criteria.",
+                "generate_resume": "📝 Generating a tailored resume for you.",
+                "generate_cover_letter": "✍️ Creating a personalized cover letter.",
+                "research_company": "🏢 Researching the company for you.",
+                "default": "💼 Job Hunter is on it!"
+            },
+            "CRYPTO_SENTINEL": {
+                "morning_brief": "📊 Generating your crypto morning brief.",
+                "analyze_asset": "🔎 Analyzing the requested assets.",
+                "get_signals": "📈 Fetching the latest trading signals.",
+                "market_overview": "📉 Getting market overview for you.",
+                "default": "🎯 Crypto Sentinel is analyzing the markets."
+            },
+            "IDEAS_MACHINE": {
+                "scaffold_project": "🏗️ Scaffolding your new project.",
+                "analyze_idea": "💡 Analyzing your project idea.",
+                "recommend_stack": "🔧 Recommending tech stack for your project.",
+                "default": "🛠️ Ideas Machine is working on it!"
+            },
+            "META_BUILDER": {
+                "create_agent": "🤖 Creating a new agent for you.",
+                "modify_agent": "🔧 Modifying the agent as requested.",
+                "default": "🤖 Meta Builder is generating code."
+            }
+        }
+        
+        agent_messages = messages.get(agent, {})
+        return agent_messages.get(action, agent_messages.get("default", "Task created successfully."))
+    
+    async def _log_event(self, event_type: str, payload: dict):
+        """Log an event to the event stream."""
+        try:
+            events = Database.get_collection("event_stream")
+            await events.insert_one({
+                "_id": str(uuid4()),
+                "event_type": event_type,
+                "payload": payload,
+                "timestamp": datetime.utcnow(),
+                "created_at": datetime.utcnow()
+            })
+        except Exception as e:
+            self.logger.warning(f"Failed to log event: {e}")
+
+
+# Singleton instance
+_orchestrator: Optional[Orchestrator] = None
+
+
+def get_orchestrator() -> Orchestrator:
+    """Get or create orchestrator instance."""
+    global _orchestrator
+    if _orchestrator is None:
+        _orchestrator = Orchestrator()
+    return _orchestrator
+
+
+def reset_orchestrator():
+    """Reset the orchestrator singleton (for testing)."""
+    global _orchestrator
+    _orchestrator = None
+

@@ -1,0 +1,15 @@
+{
+  "name": "text_index",
+  "mappings": {
+    "dynamic": false,
+    "fields": {
+      "content": {
+        "type": "string",
+        "analyzer": "lucene.standard"
+      },
+      "metadata.tags": {
+        "type": "string"
+      }
+    }
+  }
+}

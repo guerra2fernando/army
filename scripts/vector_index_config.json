@@ -1,0 +1,20 @@
+{
+  "name": "vector_index",
+  "type": "vectorSearch",
+  "fields": [
+    {
+      "numDimensions": 1536,
+      "path": "embedding",
+      "similarity": "cosine",
+      "type": "vector"
+    },
+    {
+      "path": "source",
+      "type": "filter"
+    },
+    {
+      "path": "tags",
+      "type": "filter"
+    }
+  ]
+}
