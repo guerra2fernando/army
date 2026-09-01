@@ -14,9 +14,6 @@
     "MAX_COMPLETION_TOKENS": "8192",
     "MAX_REQUEST_BYTES": "5242880"
   },
-  "secrets": {
-    "required": ["CLOUDFLARE_AI_GATEWAY_TOKEN"]
-  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
