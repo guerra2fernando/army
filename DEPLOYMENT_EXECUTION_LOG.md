@@ -25,9 +25,19 @@
 - Worker versions: none yet; `army-ai` does not exist on the account at inspection time.
 - Public DNS inspection: all three requested hostnames currently resolve through Cloudflare; prior record values were not changed.
 
+### Scalingo resources created
+
+- Project: `army` (`prj-f6317a10-7ecd-4180-a982-03d1d8e96809`).
+- Applications: `army-api`, `army-web`.
+- Region: `osc-fr1`.
+- GitHub integration: `https://github.com/guerra2fernando/army`, branch `main`, auto-deploy disabled.
+- Expected default origins: `army-api.osc-fr1.scalingo.io`, `army-web.osc-fr1.scalingo.io`.
+- Both apps remain un-deployed with one desired web process pending first verified boot.
+
 ### Blockers before external mutation
 
 - The shared AI gateway secret is not available in an approved password manager/secret store, so the Worker cannot be securely deployed or propagated to Scalingo and the local poller.
 - Workers AI DeepSeek V4 Pro requires Workers Paid or prepaid AI Gateway credits; account entitlement has not been verified.
 - Existing public DNS records for `army.lengrowth.com`, `api.army.lengrowth.com`, and `ai.army.lengrowth.com` must be inspected in the Cloudflare account before cutover; no DNS changes were made.
-- Scalingo CLI is authenticated at 1.47.0 and requests an update to 1.48.0 before resource mutation.
+- Scalingo CLI is authenticated at 1.47.0 and requests an update to 1.48.0 for future CLI-sensitive mutations.
+- Scalingo secret values are not yet configured because secure entry requires the user’s approved secret store/dashboard workflow.

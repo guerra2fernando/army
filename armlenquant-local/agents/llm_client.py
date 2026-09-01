@@ -44,6 +44,14 @@ class BaseLLMClient(ABC):
         pass
 
 
+class CloudflareGatewayError(RuntimeError):
+    """Safe provider error that carries only an HTTP status classification."""
+
+    def __init__(self, status_code: int):
+        super().__init__("Cloudflare Workers AI request failed")
+        self.status_code = status_code
+
+
 class GeminiClient(BaseLLMClient):
     """Google Gemini API client."""
     
@@ -220,13 +228,18 @@ class CloudflareWorkersAIClient(BaseLLMClient):
             except Exception as exc:
                 status = getattr(exc, "status_code", None)
                 if status in (400, 401, 403):
-                    raise RuntimeError("Cloudflare Workers AI request failed") from exc
+                    raise CloudflareGatewayError(status) from exc
                 if status not in self.TRANSIENT_STATUS_CODES and status is not None:
-                    raise RuntimeError("Cloudflare Workers AI request failed") from exc
+                    raise CloudflareGatewayError(status) from exc
+                if status is None and exc.__class__.__name__ not in {
+                    "APIConnectionError", "APITimeoutError", "ConnectError",
+                    "TimeoutException", "ReadTimeout", "WriteTimeout",
+                }:
+                    raise CloudflareGatewayError(500) from exc
                 if attempt == 3:
-                    raise RuntimeError("Cloudflare Workers AI request failed after retries") from exc
+                    raise CloudflareGatewayError(503) from exc
                 await asyncio.sleep(0.5 * (2 ** attempt))
-        raise RuntimeError("Cloudflare Workers AI request failed")
+        raise CloudflareGatewayError(503)
 
 
 class LLMClient:
@@ -378,7 +391,7 @@ class LLMClient:
                     await asyncio.sleep(delay)
                     continue
 
-                self.logger.error(f"LLM request failed: {e}")
+                self.logger.error("LLM request failed")
 
                 # Try fallback if auto_fallback is enabled and not a rate limit
                 if self.auto_fallback and not is_rate_limit:
