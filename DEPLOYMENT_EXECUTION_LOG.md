@@ -50,4 +50,5 @@
 - Scalingo `army-web` deployment succeeded from commit `4301210e0c4de6a3dbbd277c34517241514d3b15`; one web container is running.
 - Scalingo `army-api` deployments failed with `BSR-032` during source fetch across GitHub integration, Scalingo Git, local archive, and GitHub archive URL attempts. No API container is running.
 - Retried with official Scalingo CLI `1.48.0`; `BSR-032` persisted before buildpack execution, ruling out the installed CLI version.
+- Recreated `army-api` in the same project/region and retried with the fresh app ID `6a970d4122c0096bc4d223e0`; `BSR-032` persisted. A temporary `army-api-recovery` app was also tested and removed after the same failure. `army-web` remains running.
 - `PROJECT_DIR=armlenquant-cloud/api` and `BUILDPACK_NAME=python` are configured on `army-api`; API secrets are present by name but no values are recorded here.
