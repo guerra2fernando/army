@@ -65,7 +65,7 @@ class EmbeddingService:
                 raise ValueError(f"Unsupported provider: {self.provider}")
 
         except Exception as e:
-            logger.error(f"Embedding error with {self.provider}: {e}")
+            logger.error("Embedding request failed")
             raise
     
     async def embed_batch(self, texts: List[str]) -> List[List[float]]:
@@ -105,7 +105,7 @@ class EmbeddingService:
                 raise ValueError(f"Unsupported provider: {self.provider}")
 
         except Exception as e:
-            logger.error(f"Batch embedding error with {self.provider}: {e}")
+            logger.error("Batch embedding request failed")
             raise
 
 
