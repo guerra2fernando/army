@@ -3,7 +3,7 @@ ArmLenQuant API Configuration
 """
 from pydantic_settings import BaseSettings
 from functools import lru_cache
-from typing import Optional
+from typing import Optional, List
 
 
 class Settings(BaseSettings):
@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     app_name: str = "ArmLenQuant API"
     app_version: str = "1.0.0"
     debug: bool = False
+    cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     
     # Server
     api_host: str = "0.0.0.0"
@@ -52,8 +53,12 @@ class Settings(BaseSettings):
     openai_embedding_model: str = "text-embedding-3-small"
 
     # LLM Provider Configuration
-    llm_provider: str = "gemini"  # Default to Gemini, can be 'gemini' or 'openai'
+    llm_provider: str = "gemini"  # Supported: cloudflare, gemini, openai
     llm_auto_fallback: bool = True  # Whether to automatically fallback to alternative providers
+    cloudflare_ai_base_url: str = "https://ai.army.lengrowth.com/v1"
+    cloudflare_ai_model: str = "@cf/deepseek-ai/deepseek-v4-pro-0813"
+    cloudflare_ai_gateway_token: str = ""
+    embedding_provider: str = "openai"
 
     # Gemini
     gemini_api_key: str = ""
@@ -107,9 +112,13 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = False
 
+    @property
+    def cors_origins_list(self) -> List[str]:
+        """Return configured browser origins as a trimmed allowlist."""
+        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
 
 @lru_cache()
 def get_settings() -> Settings:
     """Get cached settings instance."""
     return Settings()
-

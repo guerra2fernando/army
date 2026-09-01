@@ -1,0 +1,24 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "army-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": false,
+  "ai": { "binding": "AI" },
+  "routes": [
+    { "pattern": "ai.army.lengrowth.com", "custom_domain": true }
+  ],
+  "vars": {
+    "AI_MODEL": "@cf/deepseek-ai/deepseek-v4-pro-0813",
+    "MAX_COMPLETION_TOKENS": "8192",
+    "MAX_REQUEST_BYTES": "5242880"
+  },
+  "secrets": {
+    "required": ["CLOUDFLARE_AI_GATEWAY_TOKEN"]
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

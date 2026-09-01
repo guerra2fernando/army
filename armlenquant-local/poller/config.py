@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     idempotency_window_hours: int = 1
     
     # LLM Configuration
-    # Provider: "gemini" (default) or "openai"
+    # Provider: "cloudflare", "gemini", or "openai"
     llm_provider: str = "gemini"
     llm_auto_fallback: bool = True  # Fallback to other provider if primary fails
     llm_delay_seconds: float = 1.5  # Delay between LLM calls to prevent rate limits
@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     # OpenAI (fallback/alternative)
     openai_api_key: str = ""
     openai_model: str = "gpt-4o"
+
+    # Cloudflare Workers AI gateway
+    cloudflare_ai_base_url: str = "https://ai.army.lengrowth.com/v1"
+    cloudflare_ai_model: str = "@cf/deepseek-ai/deepseek-v4-pro-0813"
+    cloudflare_ai_gateway_token: str = ""
     
     # Paths
     base_path: Path = Path(".")

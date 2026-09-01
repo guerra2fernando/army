@@ -6,6 +6,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, List
 from enum import Enum
 import json
+import asyncio
 from loguru import logger
 
 
@@ -13,6 +14,7 @@ class LLMProvider(str, Enum):
     """Supported LLM providers."""
     GEMINI = "gemini"
     OPENAI = "openai"
+    CLOUDFLARE = "cloudflare"
 
 
 class LLMResponse:
@@ -178,6 +180,55 @@ class OpenAIClient(BaseLLMClient):
         )
 
 
+class CloudflareWorkersAIClient(BaseLLMClient):
+    """Authenticated OpenAI-compatible client for the Workers AI gateway."""
+
+    TRANSIENT_STATUS_CODES = {429, 502, 503, 504}
+
+    def __init__(self, api_key: str, base_url: str, model: str, timeout: float = 30.0):
+        try:
+            from openai import AsyncOpenAI
+            self.client = AsyncOpenAI(api_key=api_key, base_url=base_url, timeout=timeout, max_retries=0)
+            self.model = model
+            self._available = bool(api_key and base_url and model)
+            logger.bind(component="llm_client", provider="cloudflare").info(
+                "Cloudflare Workers AI client initialized"
+            )
+        except ImportError:
+            logger.bind(component="llm_client", provider="cloudflare").warning("openai not installed")
+            self._available = False
+        except Exception:
+            logger.bind(component="llm_client", provider="cloudflare").error(
+                "Failed to initialize Cloudflare Workers AI client"
+            )
+            self._available = False
+
+    @property
+    def is_available(self) -> bool:
+        return self._available
+
+    async def chat(self, messages, temperature=0.7, max_tokens=None, json_response=False):
+        kwargs = {"model": self.model, "messages": messages, "temperature": temperature}
+        if max_tokens is not None:
+            kwargs["max_completion_tokens"] = max_tokens
+        if json_response:
+            kwargs["response_format"] = {"type": "json_object"}
+        for attempt in range(4):
+            try:
+                response = await self.client.chat.completions.create(**kwargs)
+                return LLMResponse(content=response.choices[0].message.content or "", raw_response=response)
+            except Exception as exc:
+                status = getattr(exc, "status_code", None)
+                if status in (400, 401, 403):
+                    raise RuntimeError("Cloudflare Workers AI request failed") from exc
+                if status not in self.TRANSIENT_STATUS_CODES and status is not None:
+                    raise RuntimeError("Cloudflare Workers AI request failed") from exc
+                if attempt == 3:
+                    raise RuntimeError("Cloudflare Workers AI request failed after retries") from exc
+                await asyncio.sleep(0.5 * (2 ** attempt))
+        raise RuntimeError("Cloudflare Workers AI request failed")
+
+
 class LLMClient:
     """
     Unified LLM client with automatic fallback.
@@ -191,6 +242,9 @@ class LLMClient:
         gemini_model: str = "gemini-2.0-flash",
         openai_api_key: Optional[str] = None,
         openai_model: str = "gpt-4o",
+        cloudflare_api_key: Optional[str] = None,
+        cloudflare_base_url: str = "https://ai.army.lengrowth.com/v1",
+        cloudflare_model: str = "@cf/deepseek-ai/deepseek-v4-pro-0813",
         auto_fallback: bool = True
     ):
         self.primary_provider = provider
@@ -200,12 +254,15 @@ class LLMClient:
         # Initialize clients
         self._gemini: Optional[GeminiClient] = None
         self._openai: Optional[OpenAIClient] = None
+        self._cloudflare: Optional[CloudflareWorkersAIClient] = None
         
         if gemini_api_key:
             self._gemini = GeminiClient(api_key=gemini_api_key, model=gemini_model)
         
         if openai_api_key:
             self._openai = OpenAIClient(api_key=openai_api_key, model=openai_model)
+        if cloudflare_api_key:
+            self._cloudflare = CloudflareWorkersAIClient(cloudflare_api_key, cloudflare_base_url, cloudflare_model)
         
         # Determine active client
         self._active_client: Optional[BaseLLMClient] = None
@@ -213,7 +270,13 @@ class LLMClient:
     
     def _setup_active_client(self):
         """Set up the active client based on provider preference."""
-        if self.primary_provider == LLMProvider.GEMINI:
+        if self.primary_provider == LLMProvider.CLOUDFLARE:
+            if self._cloudflare and self._cloudflare.is_available:
+                self._active_client = self._cloudflare
+                self.logger.info("Using Cloudflare Workers AI as primary LLM provider")
+            elif self.auto_fallback:
+                self._active_client = self._first_available(self._gemini, self._openai)
+        elif self.primary_provider == LLMProvider.GEMINI:
             if self._gemini and self._gemini.is_available:
                 self._active_client = self._gemini
                 self.logger.info("Using Gemini as primary LLM provider")
@@ -230,6 +293,10 @@ class LLMClient:
         
         if not self._active_client:
             self.logger.error("No LLM client available!")
+
+    @staticmethod
+    def _first_available(*clients):
+        return next((client for client in clients if client and client.is_available), None)
     
     @property
     def is_available(self) -> bool:
@@ -247,6 +314,8 @@ class LLMClient:
             return "gemini"
         elif "OpenAI" in client_class_name or self._active_client is self._openai:
             return "openai"
+        elif "Cloudflare" in client_class_name or self._active_client is self._cloudflare:
+            return "cloudflare"
         # Fallback: check if it's one of our stored clients
         if self._active_client is self._gemini:
             return "gemini"
@@ -277,7 +346,7 @@ class LLMClient:
             RuntimeError: If no LLM client is available
         """
         if not self._active_client:
-            raise RuntimeError("No LLM client available. Please configure GEMINI_API_KEY or OPENAI_API_KEY.")
+            raise RuntimeError("No LLM client available. Configure a supported chat provider.")
         
         import asyncio
 
@@ -334,6 +403,8 @@ class LLMClient:
         elif self._active_client is self._openai:
             if self._gemini and self._gemini.is_available:
                 return self._gemini
+        elif self._active_client is self._cloudflare:
+            return self._first_available(self._gemini, self._openai)
         return None
 
 
@@ -356,6 +427,9 @@ def get_llm_client() -> LLMClient:
         gemini_model=settings.gemini_model,
         openai_api_key=settings.openai_api_key or None,
         openai_model=settings.openai_model,
+        cloudflare_api_key=settings.cloudflare_ai_gateway_token or None,
+        cloudflare_base_url=settings.cloudflare_ai_base_url,
+        cloudflare_model=settings.cloudflare_ai_model,
         auto_fallback=settings.llm_auto_fallback
     )
 

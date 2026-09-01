@@ -7,6 +7,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import json
 import os
 import time
 from collections import defaultdict
@@ -119,8 +120,28 @@ async def verify_request_signature(request: Request, body: str) -> dict:
         hashlib.sha256,
     ).hexdigest()
 
-    if not hmac.compare_digest(expected_signature, headers["X-Signature"]):
-        raise HTTPException(status_code=401, detail="Invalid signature")
+    supplied_signature = headers["X-Signature"]
+    if not hmac.compare_digest(expected_signature, supplied_signature):
+        # Accept the canonical JSON representation used by the signed client
+        # when an intermediary/client reformats an equivalent JSON body.
+        try:
+            canonical_body = json.dumps(json.loads(body), separators=(",", ":"), sort_keys=False)
+        except (TypeError, ValueError):
+            canonical_body = body
+        canonical_string = _build_signing_string(
+            request.method,
+            request.url.path,
+            headers["X-Timestamp"],
+            nonce,
+            canonical_body,
+        )
+        canonical_signature = hmac.new(
+            base64.b64decode(secret["hmac_key"]),
+            canonical_string.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+        if not hmac.compare_digest(canonical_signature, supplied_signature):
+            raise HTTPException(status_code=401, detail="Invalid signature")
 
     return {
         "agent_name": agent_name,
@@ -365,4 +386,3 @@ class SecretRotationService:
                 "expires_at": {"$lt": grace_period},
             }
         )
-
