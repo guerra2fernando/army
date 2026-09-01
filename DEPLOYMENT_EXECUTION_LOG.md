@@ -42,3 +42,11 @@
 - Scalingo CLI is authenticated at 1.47.0 and requests an update to 1.48.0 for future CLI-sensitive mutations.
 - Scalingo secret values are not yet configured because secure entry requires the user’s approved secret store/dashboard workflow.
 - Initial HTTPS probes from Windows PowerShell/curl failed during local Schannel TLS negotiation; the custom-domain deployment itself completed successfully.
+
+### Post-gate deployment evidence
+
+- User confirmed Workers Paid and the Lengrowth Cloudflare account; a newly generated random gateway token was provisioned to Worker `army-ai`, Scalingo `army-api`, and the Windows user environment without printing its value.
+- Worker deployment succeeded as version `3cb7aafa-6b4b-4ce9-9928-6552269585ff`.
+- Scalingo `army-web` deployment succeeded from commit `4301210e0c4de6a3dbbd277c34517241514d3b15`; one web container is running.
+- Scalingo `army-api` deployments failed with `BSR-032` during source fetch across GitHub integration, Scalingo Git, local archive, and GitHub archive URL attempts. No API container is running.
+- `PROJECT_DIR=armlenquant-cloud/api` and `BUILDPACK_NAME=python` are configured on `army-api`; API secrets are present by name but no values are recorded here.

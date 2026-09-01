@@ -42,6 +42,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+.wrangler/
 !armlenquant-cloud/dashboard/src/lib/
 !armlenquant-cloud/dashboard/src/lib/**
 lib64/
