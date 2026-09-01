@@ -17,26 +17,21 @@ class EmbeddingService:
     """
 
     def __init__(self):
-        configured_provider = (settings.llm_provider or "openai").lower()
-        # Prefer OpenAI for deterministic test behavior; opt into Gemini explicitly elsewhere
-        if configured_provider == "gemini":
-            configured_provider = "openai"
+        configured_provider = (settings.embedding_provider or "openai").lower()
         self.provider = configured_provider
         self.dimensions = 768 if self.provider == "gemini" else 1536  # Gemini uses 768, OpenAI 1536
         self.logger = logger.bind(service="EmbeddingService")
 
         if self.provider == "openai":
-            api_key = settings.openai_api_key or "test-openai-key"
             if not settings.openai_api_key:
-                self.logger.warning("OPENAI_API_KEY not configured. Using test key for embedding stubs.")
-            self.openai_client = AsyncOpenAI(api_key=api_key)
+                raise RuntimeError("OPENAI_API_KEY is required when EMBEDDING_PROVIDER=openai")
+            self.openai_client = AsyncOpenAI(api_key=settings.openai_api_key)
             self.model = settings.openai_embedding_model
             self.logger.info("Using OpenAI for embeddings")
         elif self.provider == "gemini":
-            api_key = settings.gemini_api_key or "test-gemini-key"
             if not settings.gemini_api_key:
-                self.logger.warning("Gemini API key not configured. Using test key for embedding stubs.")
-            genai.configure(api_key=api_key)
+                raise RuntimeError("GEMINI_API_KEY is required when EMBEDDING_PROVIDER=gemini")
+            genai.configure(api_key=settings.gemini_api_key)
             self.model = "models/text-embedding-004"  # Gemini embedding model
             self.logger.info("Using Gemini for embeddings")
         else:
@@ -124,4 +119,3 @@ def get_embedding_service() -> EmbeddingService:
     if _embedding_service is None:
         _embedding_service = EmbeddingService()
     return _embedding_service
-

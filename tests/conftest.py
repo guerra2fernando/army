@@ -20,6 +20,7 @@ os.environ["OPENAI_API_KEY"] = "sk-test-key"
 os.environ["COINGECKO_API_KEY"] = ""
 os.environ["CRYPTOPANIC_API_KEY"] = ""
 os.environ["DEBUG"] = "true"
+os.environ["CORS_ORIGINS"] = "https://army.lengrowth.com,http://localhost:3000,http://127.0.0.1:3000"
 os.environ["TASK_LEASE_DURATION_MINUTES"] = "30"
 os.environ["MAX_TASK_RETRIES"] = "3"
 os.environ["IDEMPOTENCY_WINDOW_HOURS"] = "1"
@@ -257,4 +258,3 @@ async def test_agent() -> dict:
     
     await agents.insert_one(agent_doc)
     return agent_doc
-

@@ -86,3 +86,26 @@ class TestRootEndpoint:
         assert data["status"] == "running"
         assert data["docs"] == "/docs"
 
+
+class TestCORS:
+    """Production CORS must be an explicit origin allowlist."""
+
+    @pytest.mark.asyncio
+    async def test_configured_dashboard_origin_is_allowed(self, client: AsyncClient):
+        response = await client.get(
+            "/health",
+            headers={"Origin": "https://army.lengrowth.com"},
+        )
+        assert response.status_code == 200
+        assert response.headers["access-control-allow-origin"] == "https://army.lengrowth.com"
+        assert response.headers["access-control-allow-credentials"] == "true"
+
+    @pytest.mark.asyncio
+    async def test_unrelated_origin_is_rejected(self, client: AsyncClient):
+        response = await client.get(
+            "/health",
+            headers={"Origin": "https://unrelated.example"},
+        )
+        assert response.status_code == 200
+        assert "access-control-allow-origin" not in response.headers
+
