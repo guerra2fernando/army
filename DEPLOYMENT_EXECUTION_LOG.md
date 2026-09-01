@@ -52,3 +52,5 @@
 - Retried with official Scalingo CLI `1.48.0`; `BSR-032` persisted before buildpack execution, ruling out the installed CLI version.
 - Recreated `army-api` in the same project/region and retried with the fresh app ID `6a970d4122c0096bc4d223e0`; `BSR-032` persisted. A temporary `army-api-recovery` app was also tested and removed after the same failure. `army-web` remains running.
 - `PROJECT_DIR=armlenquant-cloud/api` and `BUILDPACK_NAME=python` are configured on `army-api`; API secrets are present by name but no values are recorded here.
+- Explicit `web:1` provisioning was attempted; no container could start because the deployment never produced an image.
+- After setting `BUILDPACK_NAME=python`, the linked GitHub manual deployment still failed at source fetch/buildpack handoff with `BSR-032`: deployment `860616d4-25fe-48ff-887b-c2427c7ab9d4`, commit `2ad277c95fd199037911162ced5394f5083ff418`, image size `0 B`. This rules out the Python web command and buildpack auto-detection as the cause.
